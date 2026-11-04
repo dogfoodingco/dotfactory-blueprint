@@ -456,7 +456,7 @@ def main(arguments: list[str] | None = None) -> int:
     )
     attention.set_defaults(callback=_attention)
     operator = commands.add_parser("operator", help="control the running factory over its owner-only socket")
-    operator.add_argument("operation", choices=("status", "artifacts", "delivery", "command", "planning-chat", "drain"))
+    operator.add_argument("operation", choices=("status", "artifacts", "delivery", "command", "planning-chat", "drain", "resume"))
     operator.add_argument("--config", default=os.environ.get("DOTFACTORY_CONFIG"))
     operator.add_argument("--project", required=True)
     operator.add_argument("--execution")

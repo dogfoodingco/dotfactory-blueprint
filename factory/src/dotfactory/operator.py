@@ -84,6 +84,10 @@ class OperatorServer:
         if operation == "drain":
             self.runtime.drain_requested = True
             return {"draining": True}
+        if operation == "resume":
+            # Undo a drain that has not finished; an exited coordinator stays exited.
+            self.runtime.drain_requested = False
+            return {"draining": False}
         if operation == "command" and execution:
             # Filesystem identity is authority. Never accept a caller-supplied role.
             return self.runtime.control_service(project).execute(
