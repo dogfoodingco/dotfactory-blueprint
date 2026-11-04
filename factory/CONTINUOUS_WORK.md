@@ -70,6 +70,8 @@ PYTHONPATH=/absolute/dotfactory/factory/src python3 -m dotfactory operator drain
 - Drain lets an active stage finish, prevents another dispatch/admission, then
   exits successfully. The operator socket remains serviced while idle.
   Discovery also services it between pages; an interrupted scan admits nothing.
+- `operator resume` cancels a drain that has not finished; an exited coordinator
+  stays exited.
 - SIGINT/SIGTERM requests cancellation, not graceful drain. Inspect its receipt
   before restarting; ambiguous launches require attention, never blind replay.
 - Restart the same command with the same ledger. Existing work is recovered

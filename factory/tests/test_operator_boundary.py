@@ -105,6 +105,8 @@ class OperatorBoundaryTests(unittest.TestCase):
             self.assertFalse(foreign["ok"])
             self.assertTrue(self.call(runtime, {"operation": "drain", "project": "demo"})["ok"])
             self.assertTrue(runtime.drain_requested)
+            self.assertTrue(self.call(runtime, {"operation": "resume", "project": "demo"})["ok"])
+            self.assertFalse(runtime.drain_requested)
         self.assertFalse(endpoint.exists())
 
     def test_attention_recovers_after_a_stale_owned_socket(self):
