@@ -766,10 +766,18 @@ class ControlService:
                     "kind": "decision", "uri": f"control://commands/{command_id}",
                     "reason": parameters.get("reason"),
                 }]
+            # A human state has no attempt to carry the reason; record it as feedback
+            # so the next attempt's handoff shows what the operator changed.
+            reason = parameters.get("reason")
+            feedback = [{
+                "source": "control_api", "kind": "operator_resolution",
+                "author": principal.subject, "body": reason.strip(),
+                "url": f"control://commands/{command_id}",
+            }] if isinstance(reason, str) and reason.strip() else None
             return self._transition(
                 execution_id, target, command_id=command_id, current=current,
                 owner=owner.strip() if isinstance(owner, str) else None,
-                outcome=outcome, evidence=evidence,
+                outcome=outcome, evidence=evidence, feedback=feedback,
             )
         if action == "replan":
             edge = action_edge("replan")

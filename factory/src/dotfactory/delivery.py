@@ -20,6 +20,7 @@ PLANNED_CONTRACTS = {"plan-result-v2", "implementation-result-v2", "python-verif
 CONTRACTS = {"plan-result-v1", "implementation-result-v1", "python-verification-v1"} | PLANNED_CONTRACTS
 FAILURE_LABELS = {"failed", "retry", "exhausted", "blocked", "cancel", "duplicate"}
 MAX_BYTES = 4 * 1024 * 1024
+MAX_SOURCE_BYTES = 16 * 1024 * 1024
 VERIFICATION_POLICY_SCHEMA_VERSION = 1
 VERIFICATION_TIMEOUT_SECONDS = (60, 120)
 LEGACY_VERIFICATION_TIMEOUT_SECONDS = 60
@@ -81,7 +82,8 @@ def verification_policy_guidance() -> str:
         f"retains the legacy {LEGACY_VERIFICATION_TIMEOUT_SECONDS}-second deadline. "
         "timeout_seconds at the top level, unknown top-level fields, unknown policy keys, and "
         "other values are rejected.\n"
-        "- Output and committed source are each bounded to 4 MiB. Operator cancel and deadline "
+        f"- Output is bounded to 4 MiB and committed source to {MAX_SOURCE_BYTES // (1024 * 1024)} MiB. "
+        "Operator cancel and deadline "
         "expiry terminate the verifier's owned process group."
     )
 
@@ -402,8 +404,10 @@ def _verify(
                 raise DeliveryError("Python delivery accepts only regular committed files")
             data = git(root, "cat-file", "blob", oid.decode("ascii"))
             size += len(data)
-            if size > MAX_BYTES:
-                raise DeliveryError("committed source exceeds 4 MiB")
+            if size > MAX_SOURCE_BYTES:
+                raise DeliveryError(
+                    f"committed source exceeds {MAX_SOURCE_BYTES // (1024 * 1024)} MiB"
+                )
             destination = checkout / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(data)
