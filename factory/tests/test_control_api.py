@@ -241,6 +241,38 @@ class ControlAPITests(unittest.TestCase):
         self.assertEqual("Planning", current["current_state_id"])
         self.assertNotEqual(investigation["attempt_id"], current["attempt"]["id"])
 
+    def test_retry_from_blocked_records_operator_resolution_for_the_next_attempt(self):
+        # A resume from Blocked must carry the operator's reason to the next attempt.
+        execution = self.begin()
+        planning = self.kernel.transition(
+            execution, "Planning", actor="human", signal="linear_status_change",
+            owner="planner", command_id="claim",
+        )
+        investigation = self.kernel.transition(
+            execution, "Investigating", actor="human", signal="linear_status_change",
+            owner="investigator", attempt_id=planning["attempt_id"],
+            fence_token=planning["fence_token"], outcome="failed",
+            evidence=[{"kind": "error", "uri": "local://error"}], command_id="fail",
+        )
+        self.kernel.transition(
+            execution, "Blocked", actor="agent", signal="agent_handoff",
+            attempt_id=investigation["attempt_id"],
+            fence_token=investigation["fence_token"], outcome="blocked",
+            evidence=[{"kind": "error", "uri": "local://blocked"}], command_id="block",
+        )
+        retried = self.control.execute(
+            execution, command_id="resume-after-fix", principal=self.operator,
+            request={
+                "action": "retry", "expected_state": "Blocked", "confirmed": True,
+                "parameters": {"owner": "investigator-2", "reason": "Host limit raised to 16 MiB"},
+            },
+        )
+        self.assertEqual("completed", retried["status"])
+        self.assertEqual("Investigating", self.ledger.current(execution)["current_state_id"])
+        notes = [item["body"] for item in self.ledger.run_history(execution)["feedback"]]
+        self.assertEqual("operator_resolution", notes[-1]["kind"])
+        self.assertEqual("Host limit raised to 16 MiB", notes[-1]["body"])
+
     def test_generic_transition_uses_explicit_control_signal(self):
         execution = self.begin()
         receipt = self.control.execute(

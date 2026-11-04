@@ -241,7 +241,7 @@ at Blocked. Cancellation remains available.
 
 - Criteria: 1–32, at least one automated; definition at most 64 KiB.
 - Frozen files: at most 64; evidence 1–32 committed local files, no symlinks/escape.
-- Verification source: at most 2000 regular committed files/4 MiB.
+- Verification source: at most 2000 regular committed files/16 MiB.
 - Run: the frozen 60- or 120-second policy, 4 MiB output; final 16 KiB retained
   with full output hash. Policy-free schema-version-1 plans retain 60 seconds.
 - Receipt: actual `sys.executable` and Python version, isolated mode, restricted
