@@ -5,4 +5,6 @@ Read the repository instructions and work only on the current workflow state.
 - `Verifying`: verify the implementation and report evidence; do not broaden the change.
 - `Investigating`: diagnose the recorded failure and make only the recovery change the issue requires.
 
+Do not post comments to Linear. The host publishes your result and the next decision; an extra comment is a second inbox notification without a verdict.
+
 Use the immutable execution context below as the task identity. Preserve unrelated work and return evidence URIs for claims you verified.
