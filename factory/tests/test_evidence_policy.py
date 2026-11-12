@@ -241,7 +241,8 @@ class EvidencePolicyTests(unittest.TestCase):
             def run(self, launch):
                 result = super().run(launch)
                 root = Path(launch.workspace_path)
-                (root / ".factory/plan.md").write_text("private test credential: ghp_" + "x" * 30)
+                (root / ".factory/plan.md").write_text(
+                    fixture.PLAN + "\nprivate test credential: ghp_" + "x" * 30)
                 fixture._git(root, "add", ".")
                 fixture._git(root, "commit", "--allow-empty", "-m", "sensitive fixture")
                 return result

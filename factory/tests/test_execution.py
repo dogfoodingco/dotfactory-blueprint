@@ -165,7 +165,7 @@ else:
     root = Path('.factory')
     if not root.exists():
         root.mkdir()
-        (root / 'plan.md').write_text('Return hello and run the pinned verifier.')
+        (root / 'plan.md').write_text('Return hello and run the pinned verifier.\\n## Behavior\\nAfter: greet() returns hello.\\n## Out of scope\\n- Other greetings.\\n## Risks\\n- Wrong greeting. Check: greeting.\\n')
         (root / 'verification.json').write_text(json.dumps({
             'schema_version': 1, 'criteria': [{'id': 'greeting',
             'requirement': 'Return hello', 'kind': 'automated',
@@ -174,7 +174,7 @@ else:
         evidence = '.factory/plan.md'
     elif not (root / 'delivery.json').exists():
         Path('greeting.py').write_text("def greet():\\n    return 'hello'\\n")
-        (root / 'delivery.json').write_text('{"summary":"Return hello","limitations":[]}')
+        (root / 'delivery.json').write_text('{"summary":"Return hello","limitations":[],"spec_findings":[]}')
         evidence = '.factory/delivery.json'
     else:
         evidence = '.factory/delivery.json'
