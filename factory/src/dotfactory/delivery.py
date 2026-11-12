@@ -470,6 +470,28 @@ def _verify(
                 }}
 
 
+def prose_warnings(root: Path, contract: str, receipt: dict[str, Any]) -> list[dict[str, Any]]:
+    """Slop-phrase warnings for agent-authored handoff text.
+
+    Advisory only: callers record them beside the verdict and never change
+    ``passed``. A file that is absent or unreadable is simply not scanned.
+    """
+    from .prose import warnings
+    names = (".factory/plan.md",) if contract == "plan-result-v2" else (".factory/demo.md",)
+    texts = {}
+    for name in names:
+        try:
+            path = local_file(root, name)
+            if path.is_file():
+                texts[name] = path.read_text(encoding="utf-8", errors="replace")
+        except (DeliveryError, OSError):
+            continue
+    summary = (receipt.get("delivery") or {}).get("summary")
+    if isinstance(summary, str):
+        texts["delivery.json summary"] = summary
+    return warnings(texts)
+
+
 def _failed_result(receipt: dict[str, Any], uri: str) -> RunnerResult:
     outcome = "Host delivery check failed: " + str(receipt.get("error", "unknown error"))
     output = receipt.get("verification", {}).get("output", "")
@@ -504,6 +526,7 @@ def evaluate(ledger: Any, launch: Any, result: RunnerResult,
                "limitations": ["Checks prove only the pinned verification script's assertions.",
                                "Project code is trusted; this is not an OS sandbox."]}
     workspace = ledger.workspace_for_execution(request.execution_id)
+    root = None
     try:
         if result.preferred_label != "complete":
             raise DeliveryError("delivery contract requires complete or an explicit failure label")
@@ -624,6 +647,10 @@ def evaluate(ledger: Any, launch: Any, result: RunnerResult,
         receipt["passed"] = True
     except (DeliveryError, OSError, ValueError, subprocess.SubprocessError) as error:
         receipt["error"] = str(error)
+    if root is not None and contract in PLANNED_CONTRACTS:
+        warnings = prose_warnings(root, contract, receipt)
+        if warnings:
+            receipt["prose_warnings"] = warnings
     ledger.assert_attempt_active(request.attempt_id, request.fence_token)
     # The ledger owns the result; the provider cannot supply a receipt URI to pass.
     receipt = ledger.record_delivery_check(request.attempt_id, request.fence_token, receipt)["payload"]
