@@ -557,6 +557,16 @@ def evaluate(ledger: Any, launch: Any, result: RunnerResult,
                     raise DeliveryError(
                         "planning may change only its plan and declared verification files"
                     )
+            from . import plan_spec
+            if plan_spec.plan_contract(request.config.get("prompt")):
+                text = plan.read_text(encoding="utf-8")
+                missing = plan_spec.missing_sections(text)
+                if missing:
+                    raise DeliveryError("plan.md requires nonempty sections: "
+                                        + ", ".join("## " + name for name in missing))
+                proposal = (receipt.get("planning_requirements") or {}).get("proposal")
+                receipt["required_models"] = plan_spec.require_models(
+                    root, text, proposal, receipt["verification_plan"]["definition"])
         approved = None
         if contract in ("implementation-result-v2", "python-verification-v2"):
             approved = approved_plan(ledger, request.execution_id)
@@ -584,6 +594,14 @@ def evaluate(ledger: Any, launch: Any, result: RunnerResult,
             if not isinstance(details.get("limitations"), list) or any(not isinstance(x, str) for x in details["limitations"]):
                 raise DeliveryError("delivery.json requires a limitations string list")
             receipt["delivery"] = details
+            if contract == "python-verification-v2":
+                from . import plan_spec
+                findings = plan_spec.spec_findings(
+                    details, required=plan_spec.verify_contract(request.config.get("prompt")))
+                if findings:
+                    receipt["failure"] = {"category": "spec_findings",
+                                          "recovery": "investigate_scope_drift_against_plan"}
+                    raise DeliveryError(f"Verifying reported {len(findings)} spec finding(s) against plan.md")
             if contract in ("python-verification-v1", "python-verification-v2"):
                 # Pre-policy plan-result-v2 receipts are immutable and omit this key.
                 # Passing None preserves their historical 60-second verifier budget.

@@ -7,6 +7,9 @@ repository. Planning defines the checks; no pre-existing `verify.py` is required
 
 1. **Planning:** commit `.factory/plan.md`, `.factory/verification.json`,
    `.factory/verify.py`, and declared acceptance/regression test files.
+   `plan.md` needs nonempty `## Behavior`, `## Out of scope` and `## Risks`. A plan
+   naming a file listed in a test's `covers:` docstring must select that test as
+   an automated criterion ([ADR-0112](decisions/0112-check-the-diff-against-the-plan-brief.md)).
 2. **Autoplanning:** host validation accepts the exact planning commit and
    continues automatically to Ready. **Manual Planning** instead stops at
    PlanReview for exact-commit human approval. Production code cannot change
@@ -16,6 +19,8 @@ repository. Planning defines the checks; no pre-existing `verify.py` is required
 4. **Implementation and verification:** implement the issue; run the approved
    verifier against an isolated export of the exact committed source. Changed
    approved files or failed checks prevent Review.
+   The verification agent records `spec_findings` in `.factory/delivery.json`;
+   any finding goes to Investigating.
 5. **Review:** export the patch, requirement/feedback context, check results,
    approved checks, and limits. Request code revisions or authorize merge yourself.
 
