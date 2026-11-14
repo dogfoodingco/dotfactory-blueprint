@@ -6,5 +6,6 @@ Return preferred_label "complete", an outcome summarizing what happened, and kin
 .factory/delivery.json. The factory runs the approved planning revision's verification script
 against an isolated export of committed HEAD. Only its passing receipt allows
 Review. Do not contact Linear, publish, or merge; the operator exports the packet.
+Reference plans, ADRs, issues and ledger rows by path or URI; do not paste them.
 
 If an approved check needs changing, stop and explain why; do not weaken it.
