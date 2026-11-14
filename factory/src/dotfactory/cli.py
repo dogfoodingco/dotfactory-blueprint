@@ -174,7 +174,7 @@ def _work(args: argparse.Namespace) -> int:
         raise ValueError("max-ticks must be positive")
     if not config.values.get("work_queue", {}).get("enabled", False):
         raise ValueError("work requires work_queue.enabled=true; opt in before starting discovery")
-    with FactoryRuntime(config, project_keys=args.project) as runtime:
+    with FactoryRuntime(config, project_keys=args.project, defer_linear_preflight=True) as runtime:
         queue = WorkQueue(runtime)
         _install_signals(runtime)
         runtime.enable_operator()

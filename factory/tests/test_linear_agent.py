@@ -250,6 +250,24 @@ class LinearAgentTests(unittest.TestCase):
         ).fetchone()[0]
         self.assertEqual("confirmed_after_read", attempt)
 
+    def test_cooldown_during_ambiguous_session_create_preserves_reconciliation(self):
+        from dotfactory.linear_rate_limit import COOLDOWN_CODE
+
+        remote = FakeAgentAPI()
+        remote.ambiguous_create = True
+        worker = LinearAgentSessionWorker(self.ledger, remote)
+        urls, activities = self.projection()
+        kwargs = {
+            "issue_id": "issue-574", "marker_url": "https://runs.example/EXAMPLE-574",
+            "external_urls": urls, "activities": activities,
+        }
+        failure = LinearAPIError(COOLDOWN_CODE, "Waiting for Linear Retry-After", retryable=True)
+        with patch.object(remote, "issue_agent_sessions", side_effect=failure):
+            self.assertEqual("ambiguous", worker.sync(self.execution, **kwargs))
+        self.assertEqual("ambiguous", worker.session(self.execution)["status"])
+        self.assertEqual("active", worker.sync(self.execution, **kwargs))
+        self.assertEqual(1, remote.creates)
+
     def test_restart_after_remote_create_recovers_without_second_session(self):
         remote = FakeAgentAPI()
         worker = LinearAgentSessionWorker(self.ledger, remote)

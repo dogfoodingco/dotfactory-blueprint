@@ -5,79 +5,27 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Mapping
+from typing import Any, Mapping
 
 from .linear_reconciliation import (
     LinearObservationV1, LinearReconciler, LinearStatusBindingV1,
     content_hash, poll_observation_key, webhook_observation_key,
 )
+from .linear_rate_limit import COOLDOWN_CODE, RATE_LIMIT_CODES, LinearCooldown
+from .linear_transport import LinearAPIError, Transport, default_transport
 
 
-Transport = Callable[[str, Mapping[str, str], bytes, float], dict[str, Any]]
-RETRYABLE_CODES = {"INTERNAL_SERVER_ERROR", "RATELIMITED", "RATE_LIMITED", "TIMEOUT"}
+RETRYABLE_CODES = {"INTERNAL_SERVER_ERROR", "TIMEOUT"} | RATE_LIMIT_CODES
 NOT_FOUND_CODES = {"ENTITY_NOT_FOUND", "NOT_FOUND", "R404"}
-
-
-class LinearAPIError(RuntimeError):
-    def __init__(
-        self, code: str, message: str, *, retryable: bool,
-        ambiguous: bool = False,
-    ) -> None:
-        super().__init__(message)
-        self.code = code
-        self.retryable = retryable
-        self.ambiguous = ambiguous
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "code": self.code, "message": str(self),
-            "retryable": self.retryable, "ambiguous": self.ambiguous,
-        }
-
-
-def _default_transport(
-    endpoint: str, headers: Mapping[str, str], body: bytes, timeout: float,
-) -> dict[str, Any]:
-    request = urllib.request.Request(
-        endpoint, data=body, headers=dict(headers), method="POST"
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            payload = response.read()
-    except urllib.error.HTTPError as error:
-        retryable = error.code == 429 or error.code >= 500
-        raise LinearAPIError(
-            f"http_{error.code}", "Linear GraphQL request failed",
-            retryable=retryable,
-        ) from error
-    except (urllib.error.URLError, TimeoutError, OSError) as error:
-        raise LinearAPIError(
-            "transport_error", "Linear GraphQL result is unknown",
-            retryable=True, ambiguous=True,
-        ) from error
-    try:
-        decoded = json.loads(payload.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise LinearAPIError(
-            "invalid_response", "Linear returned invalid JSON",
-            retryable=False,
-        ) from error
-    if not isinstance(decoded, dict):
-        raise LinearAPIError(
-            "invalid_response", "Linear returned a non-object response",
-            retryable=False,
-        )
-    return decoded
 
 
 class LinearGraphQLClient:
     def __init__(
         self, authorization: str, *, endpoint: str = "https://api.linear.app/graphql",
         timeout_seconds: int = 15, transport: Transport | None = None,
+        cooldown: LinearCooldown | None = None,
     ) -> None:
         if not authorization.strip():
             raise LinearAPIError("missing_auth", "Linear authorization is missing", retryable=False)
@@ -89,33 +37,49 @@ class LinearGraphQLClient:
         self.authorization = authorization
         self.endpoint = endpoint
         self.timeout_seconds = timeout_seconds
-        self.transport = transport or _default_transport
+        self.transport = transport or default_transport
+        self.cooldown = cooldown
 
     def execute(
         self, operation: str, query: str, variables: dict[str, Any],
     ) -> dict[str, Any]:
+        if self.cooldown and (pending := self.cooldown.pending()):
+            deferred = LinearAPIError(COOLDOWN_CODE, "Waiting for Linear Retry-After", retryable=True)
+            deferred.rate_limit = pending
+            raise deferred
         body = json.dumps(
             {"operationName": operation, "query": query, "variables": variables},
             sort_keys=True, separators=(",", ":"),
         ).encode("utf-8")
-        response = self.transport(
-            self.endpoint,
-            {
-                "Authorization": self.authorization,
-                "Content-Type": "application/json",
-                "User-Agent": "dotfactory-linear/1",
-            },
-            body, float(self.timeout_seconds),
-        )
+        try:
+            response = self.transport(
+                self.endpoint,
+                {
+                    "Authorization": self.authorization,
+                    "Content-Type": "application/json",
+                    "User-Agent": "dotfactory-linear/1",
+                },
+                body, float(self.timeout_seconds),
+            )
+        except LinearAPIError as error:
+            if self.cooldown and error.code.upper() in RATE_LIMIT_CODES:
+                error.rate_limit = self.cooldown.observe(operation, error.code, error.headers)
+            raise
         errors = response.get("errors")
         if errors:
             first = errors[0] if isinstance(errors, list) else {}
             extensions = first.get("extensions", {}) if isinstance(first, dict) else {}
             code = str(extensions.get("code", "graphql_error"))
-            raise LinearAPIError(
-                code, "Linear GraphQL operation failed",
-                retryable=code.upper() in RETRYABLE_CODES,
-            )
+            # Linear reports a missing comment as INPUT_ERROR, not R404.
+            # Keep unrelated input/permission failures distinguishable.
+            if (operation in {"FactoryComment", "FactorySlackComment"} and code == "INPUT_ERROR"
+                    and first.get("path") == ["comment"]
+                    and first.get("message") == "Entity not found: Comment"):
+                code = "ENTITY_NOT_FOUND"
+            error = LinearAPIError(code, "Linear GraphQL operation failed", retryable=code.upper() in RETRYABLE_CODES)
+            if self.cooldown and code.upper() in RATE_LIMIT_CODES:
+                error.rate_limit = self.cooldown.observe(operation, code, getattr(response, "headers", None))
+            raise error
         data = response.get("data")
         if not isinstance(data, dict):
             raise LinearAPIError(
@@ -327,9 +291,7 @@ class LinearGraphQLClient:
                 {"input": {"issueId": issue_id, "externalUrls": external_urls}},
             )
         except LinearAPIError as error:
-            if error.retryable and error.code.upper() not in {
-                "RATELIMITED", "RATE_LIMITED", "HTTP_429",
-            }:
+            if error.retryable and error.code.upper() not in RATE_LIMIT_CODES and not error.rate_limit:
                 raise LinearAPIError(
                     error.code, "Linear agent session result is unknown",
                     retryable=True, ambiguous=True,
@@ -349,9 +311,7 @@ class LinearGraphQLClient:
                 {"id": session_id, "input": {"externalUrls": external_urls}},
             )
         except LinearAPIError as error:
-            if error.retryable and error.code.upper() not in {
-                "RATELIMITED", "RATE_LIMITED", "HTTP_429",
-            }:
+            if error.retryable and error.code.upper() not in RATE_LIMIT_CODES and not error.rate_limit:
                 raise LinearAPIError(
                     error.code, "Linear agent session update result is unknown",
                     retryable=True, ambiguous=True,
@@ -389,9 +349,7 @@ class LinearGraphQLClient:
                 }},
             )
         except LinearAPIError as error:
-            if error.retryable and error.code.upper() not in {
-                "RATELIMITED", "RATE_LIMITED", "HTTP_429",
-            }:
+            if error.retryable and error.code.upper() not in RATE_LIMIT_CODES and not error.rate_limit:
                 raise LinearAPIError(
                     error.code, "Linear agent activity result is unknown",
                     retryable=True, ambiguous=True,
@@ -417,9 +375,7 @@ class LinearGraphQLClient:
         try:
             data = self.execute(operation, query, variables)
         except LinearAPIError as error:
-            if error.retryable and error.code.upper() not in {
-                "RATELIMITED", "RATE_LIMITED", "HTTP_429",
-            }:
+            if error.retryable and error.code.upper() not in RATE_LIMIT_CODES and not error.rate_limit:
                 raise LinearAPIError(
                     error.code, "Linear comment mutation result is unknown",
                     retryable=True, ambiguous=True,
@@ -554,7 +510,7 @@ class LinearGraphQLClient:
                 {"id": issue_id, "statusId": status_id},
             )
         except LinearAPIError as error:
-            if error.retryable and error.code.upper() not in {"RATELIMITED", "RATE_LIMITED", "HTTP_429"}:
+            if error.retryable and error.code.upper() not in RATE_LIMIT_CODES and not error.rate_limit:
                 raise LinearAPIError(
                     error.code, "Linear mutation result is unknown",
                     retryable=True, ambiguous=True,
