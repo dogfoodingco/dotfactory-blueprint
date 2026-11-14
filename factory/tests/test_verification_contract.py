@@ -2,6 +2,7 @@
 import base64
 import copy
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -108,6 +109,16 @@ class ExecutorTests(unittest.TestCase):
         self.assertEqual(b'before', base64.b64decode(result['artifacts'][0]['data_base64']))
         self.assertEqual(self.sha, result['source_sha'])
         self.assertEqual(worker.digest(method()), result['method_digest'])
+
+    def test_bundle_uses_the_explicit_repository_despite_inherited_git_context(self):
+        redirected = self.root / 'redirected.git'
+        _git(self.root, 'init', '--bare', str(redirected))
+        with patch.dict(os.environ, {'GIT_DIR': str(redirected)}):
+            self.spec['bundle'] = worker.bundle(self.root, self.sha)
+        result = worker.dispatch(self.spec)
+        self.assertTrue(result['passed'])
+        self.assertEqual(b'before', base64.b64decode(result['artifacts'][0]['data_base64']))
+        self.assertEqual('', worker.git(redirected, 'for-each-ref', 'refs/dotfactory/'))
 
     def test_missing_artifact_nonzero_wrong_media_and_source_mutation(self):
         commands = ["pass", "raise SystemExit(7)", "open('greeting.py','w').write('tampered')"]

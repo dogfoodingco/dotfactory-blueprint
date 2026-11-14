@@ -57,18 +57,22 @@ def snapshot(path):
 
 
 def bundle(path, sha):
+    env = {key: value for key, value in os.environ.items()
+           if key not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE",
+                          "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES")}
+    env.update(GIT_NO_REPLACE_OBJECTS="1", GIT_NO_LAZY_FETCH="1")
     with tempfile.TemporaryDirectory() as temporary:
         ref = "refs/dotfactory/export-" + sha
-        git(path, "update-ref", ref, sha)
+        git(path, "update-ref", ref, sha, env=env)
         try:
             target = Path(temporary) / "source.bundle"
-            git(path, "bundle", "create", str(target), ref)
+            git(path, "bundle", "create", str(target), ref, env=env)
             data = target.read_bytes()
             if len(data) > MAX_BYTES // 2:
                 raise WorkerError("source bundle exceeds transfer limit")
             return base64.b64encode(data).decode()
         finally:
-            git(path, "update-ref", "-d", ref, sha)
+            git(path, "update-ref", "-d", ref, sha, env=env)
 
 
 def import_bundle(path, encoded, sha):
