@@ -22,6 +22,7 @@ PlanReview for human approval of that exact commit. Implementation is a separate
 runner stage; do not implement within this planning attempt.
 Return preferred_label "complete", a descriptive outcome, and committed local
 file evidence. Do not contact Linear, publish, or merge.
+Reference plans, ADRs, issues and ledger rows by path or URI; do not paste them.
 
 
 ## Special requirements from planning chat
