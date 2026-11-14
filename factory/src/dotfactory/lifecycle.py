@@ -20,7 +20,8 @@ from .instance import FactoryConfig, FactoryConfigError
 from .kernel import DurableKernel
 from .ledger import LedgerError, SQLiteLedger
 from .linear_agent import LinearAgentSessionWorker, build_agent_projection
-from .linear_api import LinearAPIError, LinearConvergenceWorker, LinearGraphQLClient
+from .linear_api import LinearAPIError, LinearConvergenceWorker
+from .linear_rate_limit import COOLDOWN_CODE
 from .linear_evidence import LinearEvidenceWorker, render_linear_run_summary
 from .live_runner import LiveRunner, LiveRunnerRouter, RunnerRoute
 from .observability import canonical_json
@@ -115,6 +116,7 @@ class FactoryRuntime:
         self, config: FactoryConfig, *, environment: Mapping[str, str] | None = None,
         runner: PreparedRunner | None = None, owner: str | None = None,
         project_keys: list[str] | None = None, control_only: bool = False,
+        defer_linear_preflight: bool = False,
     ) -> None:
         self.config = config
         if config.values["schema_version"] != 6:
@@ -123,6 +125,7 @@ class FactoryRuntime:
         self.owner = owner or f"{config.values['factory_id']}:{socket.gethostname()}"
         self.project_keys = config.selected_project_keys(project_keys)
         self.control_only = control_only
+        self._linear_preflight_pending = False
         self.started_at = ""
         self.stop_requested = False
         self.drain_requested = False
@@ -251,7 +254,14 @@ class FactoryRuntime:
                     "reason": "external projection preflight skipped",
                 })
             else:
-                self._build_linear()
+                try:
+                    self._build_linear()
+                except LinearAPIError as error:
+                    if not defer_linear_preflight or not error.rate_limit:
+                        raise
+                    self._linear_preflight_pending = True
+                    self._linear_preflight_retry_at = error.rate_limit["retry_at"]
+                    self.preflights.append({"kind": "linear", "available": False, "reason": error.code})
                 self._build_logfire()
         except Exception:
             if hasattr(self, "ledger"):
@@ -316,60 +326,21 @@ class FactoryRuntime:
             )
 
     def _build_linear(self) -> None:
-        projection = self.config.resolve_linear_projection(
-            environment=self.environment
-        )
-        if not projection["enabled"]:
-            self.preflights.append({
-                "kind": "linear", "available": False,
-                "reason": "projection disabled",
-            })
+        from .linear_bootstrap import build
+        build(self)
+
+    def _retry_linear_preflight(self) -> None:
+        if not self._linear_preflight_pending:
             return
-        client = LinearGraphQLClient(
-            self.config.linear_authorization(environment=self.environment),
-            endpoint=projection["endpoint"],
-            timeout_seconds=projection["timeout_seconds"],
-        )
-        for project_key, kernel in self.kernels.items():
-            project = self.config.resolve_project(
-                project_key, environment=self.environment
-            )
-            team_id = project.get("tracker_team_id")
-            if not team_id:
-                raise LifecycleError(
-                    f"Linear project {project_key} has no configured team ID"
-                )
-            worker = LinearConvergenceWorker(self.ledger, kernel, client)
-            bindings = worker.preflight_project(
-                project_key=project_key, team_id=str(team_id),
-                project_id=str(project["tracker_project_id"]),
-            )
-            self.linear_workers[project_key] = worker
-            self.linear_evidence_workers[project_key] = LinearEvidenceWorker(
-                self.ledger, client
-            )
-            if projection["agent_sessions_enabled"]:
-                agent_token = str(self.environment.get(projection["agent_token_env"], "")).strip()
-                if agent_token:
-                    authorization = agent_token if agent_token.startswith("Bearer ") else "Bearer " + agent_token
-                    agent_client = LinearGraphQLClient(
-                        authorization, endpoint=projection["endpoint"],
-                        timeout_seconds=projection["timeout_seconds"],
-                    )
-                    self.linear_agent_workers[project_key] = LinearAgentSessionWorker(
-                        self.ledger, agent_client
-                    )
-                self.preflights.append({
-                    "kind": "linear_agent", "project_key": project_key,
-                    "available": bool(agent_token),
-                    "reason": "configured" if agent_token else "agent token unavailable; using comment fallback",
-                    "token_env": projection["agent_token_env"],
-                })
-            self.preflights.append({
-                "kind": "linear", "project_key": project_key,
-                "available": True, "binding_count": len(bindings),
-                "agent_sessions_enabled": projection["agent_sessions_enabled"],
-            })
+        if time.time() < self._linear_preflight_retry_at:
+            raise LinearAPIError(COOLDOWN_CODE, "Waiting for Linear Retry-After", retryable=True)
+        try:
+            self._build_linear()
+        except LinearAPIError as error:
+            if error.rate_limit:
+                self._linear_preflight_retry_at = error.rate_limit["retry_at"]
+            raise
+        self._linear_preflight_pending = False
 
     def _build_logfire(self) -> None:
         projection = self.config.resolve_logfire_projection(
@@ -885,6 +856,7 @@ class FactoryRuntime:
             self.operator_server.pump()
         if self.drain_requested or self.stop_requested:
             return {"claimed": [], "scheduler": {"disposition": "idle"}, "cleanup": []}
+        self._retry_linear_preflight()
         from .linear_planning import poll as poll_planning, discover as discover_planning
         poll_planning(self)
         self._poll_linear()

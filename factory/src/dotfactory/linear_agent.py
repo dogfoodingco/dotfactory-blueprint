@@ -340,7 +340,7 @@ class LinearAgentSessionWorker:
         except LinearAPIError as error:
             return self._session_error(
                 item, error.as_dict(), attempt_number=attempt_number,
-                fallback=True, ambiguous=True,
+                fallback=not error.retryable, ambiguous=True,
             )
         if len(matches) == 1:
             try:
