@@ -97,7 +97,11 @@ def encoded(value: Any) -> bytes:
 
 
 def git(root: Path, *args: str) -> bytes:
-    result = subprocess.run(["git", "-C", str(root), *args], capture_output=True, timeout=15)
+    env = {key: value for key, value in os.environ.items()
+           if key not in {"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE",
+                          "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"}}
+    env["GIT_NO_REPLACE_OBJECTS"] = "1"
+    result = subprocess.run(["git", "-C", str(root), *args], capture_output=True, timeout=15, env=env)
     if result.returncode:
         raise DeliveryError("cannot inspect delivery Git state")
     if len(result.stdout) > MAX_BYTES:

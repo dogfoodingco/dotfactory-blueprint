@@ -656,6 +656,20 @@ class VerifiedDeliveryTests(unittest.TestCase):
         proof = _verify(repo, head, None)
         self.assertEqual(0, proof["exit_code"])
 
+    def test_verifier_reads_the_committed_tree_despite_replacement_refs(self):
+        repo = self.root / "repository"
+        original = git(repo, "rev-parse", "HEAD").decode().strip()
+        (repo / "greeting.py").write_text('def greet():\n    return "こんにちは"\n')
+        _git(repo, "add", "greeting.py")
+        _git(repo, "commit", "-m", "Passing replacement")
+        replacement = git(repo, "rev-parse", "HEAD").decode().strip()
+        _git(repo, "reset", "--hard", original)
+        _git(repo, "replace", original, replacement)
+        self.assertIn(b"hello", git(repo, "show", original + ":greeting.py"))
+        with patch.dict("os.environ", {"GIT_DIR": str(self.root / "other.git")}):
+            proof = _verify(repo, original, None)
+        self.assertNotEqual(0, proof["exit_code"])
+
     def test_verifier_cancellation_terminates_owned_process(self):
         repo = self.root / "repository"
         (repo / ".factory/verify.py").write_text("import time\ntime.sleep(120)\n")
