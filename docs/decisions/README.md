@@ -48,6 +48,7 @@ configured by dotfactory belong to their owning repository.
 | [0045](0045-freeze-registered-run-selections.md) | Freeze registered workflow and runner selections at admission | Proposed | — |
 | [0047](0047-freeze-local-review-evidence-policy.md) | Freeze local review evidence policy before export | Proposed | — |
 | [0048](0048-bind-hosted-projection-authority-to-runs.md) | Bind hosted projection authority to runs | Proposed | — |
+| [0112](0112-check-the-diff-against-the-plan-brief.md) | Check the diff against the plan brief | Proposed | — |
 
 ## Lifecycle
 

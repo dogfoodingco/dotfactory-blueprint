@@ -3,6 +3,13 @@ Use the authoritative host verification contract injected below. Select any
 non-legacy verification deadline explicitly in .factory/verification.json; do
 not duplicate or infer host policy from this checked-in prompt.
 Commit .factory/plan.md with requirements, design, risks, and acceptance coverage.
+plan.md must contain these nonempty sections; the host rejects a plan without them:
+- `## Behavior`: observable before/after, not steps.
+- `## Out of scope`: at least one line naming what this change will not do.
+- `## Risks`: each risk names the criterion that checks it, or says `unchecked`.
+Name planned source files by repository path. A test whose module docstring has
+a `covers:` line is a model of those files: when the plan names a covered file,
+add an automated criterion listing that model, or the host rejects the plan.
 Create .factory/verification.json with schema_version 1 and criteria: each has a
 unique id, requirement, and kind. Automated criteria list files (Python checks
 under a tests/ directory at any repository depth, such as factory/tests/, or
