@@ -17,3 +17,9 @@ Review. Do not contact Linear, publish, or merge; the operator exports the packe
 Reference plans, ADRs, issues and ledger rows by path or URI; do not paste them.
 
 If an approved check needs changing, stop and explain why; do not weaken it.
+
+Before the final handoff, if the project has a feature map, compare the plan's
+selected cases with the actual changed paths and run the affected cases within
+approved scope. Include per-case results, revision-bound evidence, cleanup and
+unresolved gaps in local verification evidence, and carry the gaps into
+.factory/delivery.json's limitations. The map does not replace the host receipt.
