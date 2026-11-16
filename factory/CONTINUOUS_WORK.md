@@ -170,4 +170,6 @@ Set the same `DOTFACTORY_HOME` for coordinators on one host that use the same Li
 
 Inspect `linear-rate-limit/activity.json` in that home for the last 100 observed throttles, including the GraphQL operation, available quota counters, and retry time. The file excludes request bodies and credentials.
 
-See [ADR-0049](../docs/decisions/0049-share-linear-rate-limit-cooldowns.md).
+Inspect the `request_minutes` table in `linear-traffic/linear-requests.sqlite3` in the same home for counts by project, GraphQL operation, UTC minute, and outcome. The `minute` column counts minutes since the Unix epoch. The store keeps the latest 24 hours during active traffic. Local cooldown deferrals spend no request and add no count.
+
+See [ADR-0049](../docs/decisions/0049-share-linear-rate-limit-cooldowns.md) and [ADR-0051](../docs/decisions/0051-count-linear-requests.md).

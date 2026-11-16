@@ -5,6 +5,7 @@ from .linear_agent import LinearAgentSessionWorker
 from .linear_api import LinearConvergenceWorker, LinearGraphQLClient
 from .linear_evidence import LinearEvidenceWorker
 from .linear_rate_limit import LinearCooldown
+from .linear_requests import LinearRequestCounts
 
 
 def _actor(runtime, project_key):
@@ -35,9 +36,12 @@ def build(runtime):
         app_actor = _actor(runtime, project_key)
         tracker_actor = app_actor if agent_token and authorization.strip().removeprefix("Bearer ") == agent_token.removeprefix("Bearer ") else None
 
+        counts = LinearRequestCounts(directory / "linear-traffic", project_key)
+
         def client(token, actor):
             cooldown = LinearCooldown(directory / "linear-rate-limit", endpoint, token, actor=actor, project=project_key)
-            return LinearGraphQLClient(token, endpoint=endpoint, timeout_seconds=projection["timeout_seconds"], cooldown=cooldown)
+            return LinearGraphQLClient(token, endpoint=endpoint, timeout_seconds=projection["timeout_seconds"],
+                                       cooldown=cooldown, request_counts=counts)
 
         tracker_client = client(authorization, tracker_actor)
         worker = LinearConvergenceWorker(runtime.ledger, kernel, tracker_client)
