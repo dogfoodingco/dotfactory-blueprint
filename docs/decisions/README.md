@@ -50,6 +50,7 @@ configured by dotfactory belong to their owning repository.
 | [0048](0048-bind-hosted-projection-authority-to-runs.md) | Bind hosted projection authority to runs | Proposed | — |
 | [0049](0049-share-linear-rate-limit-cooldowns.md) | Share Linear rate-limit cooldowns | Proposed | — |
 | [0050](0050-check-the-diff-against-the-plan-brief.md) | Check the diff against the plan brief | Proposed | — |
+| [0052](0052-reserve-linear-request-capacity.md) | Reserve Linear request capacity | Proposed | — |
 
 ## Lifecycle
 

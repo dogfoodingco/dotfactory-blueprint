@@ -25,7 +25,7 @@ class LinearGraphQLClient:
     def __init__(
         self, authorization: str, *, endpoint: str = "https://api.linear.app/graphql",
         timeout_seconds: int = 15, transport: Transport | None = None,
-        cooldown: LinearCooldown | None = None,
+        cooldown: LinearCooldown | None = None, request_budget=None,
     ) -> None:
         if not authorization.strip():
             raise LinearAPIError("missing_auth", "Linear authorization is missing", retryable=False)
@@ -39,6 +39,7 @@ class LinearGraphQLClient:
         self.timeout_seconds = timeout_seconds
         self.transport = transport or default_transport
         self.cooldown = cooldown
+        self.request_budget = request_budget
 
     def execute(
         self, operation: str, query: str, variables: dict[str, Any],
@@ -51,42 +52,50 @@ class LinearGraphQLClient:
             {"operationName": operation, "query": query, "variables": variables},
             sort_keys=True, separators=(",", ":"),
         ).encode("utf-8")
+        ticket = self.request_budget.admit() if self.request_budget else None
+        headers = None
         try:
-            response = self.transport(
-                self.endpoint,
-                {
-                    "Authorization": self.authorization,
-                    "Content-Type": "application/json",
-                    "User-Agent": "dotfactory-linear/1",
-                },
-                body, float(self.timeout_seconds),
-            )
-        except LinearAPIError as error:
-            if self.cooldown and error.code.upper() in RATE_LIMIT_CODES:
-                error.rate_limit = self.cooldown.observe(operation, error.code, error.headers)
-            raise
-        errors = response.get("errors")
-        if errors:
-            first = errors[0] if isinstance(errors, list) else {}
-            extensions = first.get("extensions", {}) if isinstance(first, dict) else {}
-            code = str(extensions.get("code", "graphql_error"))
-            # Linear reports a missing comment as INPUT_ERROR, not R404.
-            # Keep unrelated input/permission failures distinguishable.
-            if (operation in {"FactoryComment", "FactorySlackComment"} and code == "INPUT_ERROR"
-                    and first.get("path") == ["comment"]
-                    and first.get("message") == "Entity not found: Comment"):
-                code = "ENTITY_NOT_FOUND"
-            error = LinearAPIError(code, "Linear GraphQL operation failed", retryable=code.upper() in RETRYABLE_CODES)
-            if self.cooldown and code.upper() in RATE_LIMIT_CODES:
-                error.rate_limit = self.cooldown.observe(operation, code, getattr(response, "headers", None))
-            raise error
-        data = response.get("data")
-        if not isinstance(data, dict):
-            raise LinearAPIError(
-                "missing_data", "Linear GraphQL response has no data",
-                retryable=False,
-            )
-        return data
+            try:
+                response = self.transport(
+                    self.endpoint,
+                    {
+                        "Authorization": self.authorization,
+                        "Content-Type": "application/json",
+                        "User-Agent": "dotfactory-linear/1",
+                    },
+                    body, float(self.timeout_seconds),
+                )
+            except LinearAPIError as error:
+                headers = error.headers
+                if self.cooldown and error.code.upper() in RATE_LIMIT_CODES:
+                    error.rate_limit = self.cooldown.observe(operation, error.code, error.headers)
+                raise
+            headers = getattr(response, "headers", None)
+            errors = response.get("errors")
+            if errors:
+                first = errors[0] if isinstance(errors, list) else {}
+                extensions = first.get("extensions", {}) if isinstance(first, dict) else {}
+                code = str(extensions.get("code", "graphql_error"))
+                # Linear reports a missing comment as INPUT_ERROR, not R404.
+                # Keep unrelated input/permission failures distinguishable.
+                if (operation in {"FactoryComment", "FactorySlackComment"} and code == "INPUT_ERROR"
+                        and first.get("path") == ["comment"]
+                        and first.get("message") == "Entity not found: Comment"):
+                    code = "ENTITY_NOT_FOUND"
+                error = LinearAPIError(code, "Linear GraphQL operation failed", retryable=code.upper() in RETRYABLE_CODES)
+                if self.cooldown and code.upper() in RATE_LIMIT_CODES:
+                    error.rate_limit = self.cooldown.observe(operation, code, headers)
+                raise error
+            data = response.get("data")
+            if not isinstance(data, dict):
+                raise LinearAPIError(
+                    "missing_data", "Linear GraphQL response has no data",
+                    retryable=False,
+                )
+            return data
+        finally:
+            if self.request_budget:
+                self.request_budget.observe(ticket, headers)
 
     def preflight(
         self, *, project_key: str, workflow_digest: str, team_id: str,

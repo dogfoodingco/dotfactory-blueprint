@@ -388,6 +388,7 @@ class FactoryRuntime:
         return self.stop_requested or run["status"] in ("canceled", "superseded")
 
     def _poll_linear_during_run(self, run: Mapping[str, Any]) -> None:
+        from .linear_request_budget import request_priority
         from .projection_policy import authorize
         # Only the network read crosses threads. Observe/reconcile/command work
         # always runs here on the existing ledger writer.
@@ -441,9 +442,10 @@ class FactoryRuntime:
 
         def read() -> None:
             try:
-                issue = client.issue(identifier)
-                if planning_session_id:
-                    issue['_planning_session'] = planning_client.planning_session(planning_session_id)
+                with request_priority("probe"):
+                    issue = client.issue(identifier)
+                    if planning_session_id:
+                        issue['_planning_session'] = planning_client.planning_session(planning_session_id)
                 results.put((execution_id, project_key, issue, None))
             except Exception as error:
                 reason = error.code if isinstance(error, LinearAPIError) else type(error).__name__

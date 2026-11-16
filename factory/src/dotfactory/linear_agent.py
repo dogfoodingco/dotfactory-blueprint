@@ -11,6 +11,7 @@ from typing import Any, Mapping
 
 from .ledger import LedgerError, SQLiteLedger, redact_payload
 from .linear_api import LinearAPIError, LinearGraphQLClient
+from .linear_request_budget import request_priority
 from .linear_evidence import link_label, readable_incidents, render_linear_run_summary, worker_location_label
 from .observability import canonical_json
 
@@ -622,7 +623,9 @@ class LinearAgentSessionWorker:
                 dict(activity["content"]),
             )
         for activity in self._pending_activities(execution_id):
-            result = self._drain_activity(activity, str(session["session_id"]))
+            priority = "command" if activity["semantic_key"].startswith("planning-reply:") else "background"
+            with request_priority(priority):
+                result = self._drain_activity(activity, str(session["session_id"]))
             if result != "confirmed":
                 return result
         return "active"

@@ -171,3 +171,11 @@ Set the same `DOTFACTORY_HOME` for coordinators on one host that use the same Li
 Inspect `linear-rate-limit/activity.json` in that home for the last 100 observed throttles, including the GraphQL operation, available quota counters, and retry time. The file excludes request bodies and credentials.
 
 See [ADR-0049](../docs/decisions/0049-share-linear-rate-limit-cooldowns.md).
+
+The shared request budget defers background Linear work before it exhausts
+control capacity. An operator can inspect `linear-budget/requests.sqlite3`
+under the Dotfactory home using read-only SQLite access. The `request_budget`
+table includes the provider's last reported request capacity and remaining
+count, when it was sampled, and the local estimate at its last update.
+Admission refills the estimate over time.
+See [ADR-0052](../docs/decisions/0052-reserve-linear-request-capacity.md).
