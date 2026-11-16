@@ -5,6 +5,7 @@ from .linear_agent import LinearAgentSessionWorker
 from .linear_api import LinearConvergenceWorker, LinearGraphQLClient
 from .linear_evidence import LinearEvidenceWorker
 from .linear_rate_limit import LinearCooldown
+from .linear_request_budget import LinearRequestBudget, request_priority
 
 
 def _actor(runtime, project_key):
@@ -37,12 +38,15 @@ def build(runtime):
 
         def client(token, actor):
             cooldown = LinearCooldown(directory / "linear-rate-limit", endpoint, token, actor=actor, project=project_key)
-            return LinearGraphQLClient(token, endpoint=endpoint, timeout_seconds=projection["timeout_seconds"], cooldown=cooldown)
+            return LinearGraphQLClient(token, endpoint=endpoint, timeout_seconds=projection["timeout_seconds"],
+                                       cooldown=cooldown,
+                                       request_budget=LinearRequestBudget(directory / "linear-budget", cooldown.key))
 
         tracker_client = client(authorization, tracker_actor)
         worker = LinearConvergenceWorker(runtime.ledger, kernel, tracker_client)
-        bindings = worker.preflight_project(project_key=project_key, team_id=str(team_id),
-                                           project_id=str(project["tracker_project_id"]))
+        with request_priority("probe"):
+            bindings = worker.preflight_project(project_key=project_key, team_id=str(team_id),
+                                               project_id=str(project["tracker_project_id"]))
         tracker[project_key] = worker
         evidence[project_key] = LinearEvidenceWorker(runtime.ledger, tracker_client)
         if projection["agent_sessions_enabled"]:

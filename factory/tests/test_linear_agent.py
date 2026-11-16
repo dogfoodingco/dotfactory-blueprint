@@ -14,6 +14,7 @@ from dotfactory.linear_agent import (
 )
 from dotfactory.linear_api import LinearAPIError, LinearGraphQLClient
 from dotfactory.linear_evidence import LinearEvidenceWorker
+from dotfactory.linear_request_budget import RESERVE_CODE, LinearRequestBudget
 from dotfactory.lifecycle import FactoryRuntime
 
 
@@ -338,6 +339,33 @@ class LinearAgentTests(unittest.TestCase):
         self.assertEqual(
             "confirmed", self.ledger.linear_evidence(self.execution)["status"]
         )
+
+    def test_next_native_reply_can_spend_reserved_request_capacity(self):
+        budget = LinearRequestBudget(Path(self.temp.name) / "budget", "shared", clock=lambda: 1000)
+
+        class MeteredAgent(FakeAgentAPI):
+            def create_agent_activity(self, **kwargs):
+                budget.admit()
+                return super().create_agent_activity(**kwargs)
+
+        api = MeteredAgent()
+        worker = LinearAgentSessionWorker(self.ledger, api)
+        arguments = {
+            "issue_id": "issue-574",
+            "marker_url": "https://runs.example/EXAMPLE-574",
+            "external_urls": [{"label": "Dotfactory run", "url": "https://runs.example/EXAMPLE-574"}],
+        }
+        self.assertEqual("active", worker.sync(self.execution, activities=[], **arguments))
+        budget.observe(budget.admit(), {
+            "x-ratelimit-requests-limit": "100",
+            "x-ratelimit-requests-remaining": "20",
+        })
+        with self.assertRaises(LinearAPIError) as refused:
+            budget.admit()
+        self.assertEqual(RESERVE_CODE, refused.exception.code)
+        activity = {"semantic_key": "planning-reply:prompt-1", "content": {"type": "thought", "body": "Paused."}}
+        self.assertEqual("active", worker.sync(self.execution, activities=[activity], **arguments))
+        self.assertEqual(1, api.activity_creates)
 
     def test_ambiguous_activity_is_read_before_reuse_of_stable_id(self):
         remote = FakeAgentAPI()

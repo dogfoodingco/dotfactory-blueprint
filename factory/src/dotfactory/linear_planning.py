@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from .control import ControlError, Principal
 from .ledger import LedgerError
 from .linear_api import LinearAPIError
+from .linear_request_budget import request_priority
 from .observability import canonical_json
 from .planning import conversation, view
 from .worker import digest
@@ -375,6 +376,11 @@ def _diagnostic(runtime, project, execution, error):
         {'status': 'needs_attention', 'message': str(error)})
 
 
+def read_control_session(client, session_id):
+    with request_priority("probe"):
+        return client.planning_session(session_id)
+
+
 def poll(runtime):
     for run in runtime._owned_runs('running'):
         execution = str(run['id'])
@@ -389,7 +395,7 @@ def poll(runtime):
             if not worker:
                 raise LedgerError('Linear Agent Session projection is unavailable')
             _async_read(runtime, 'session:' + execution,
-                lambda client=worker.client, identity=bound['session_id']: client.planning_session(identity),
+                lambda client=worker.client, identity=bound['session_id']: read_control_session(client, identity),
                 lambda value, execution=execution: receive(runtime, execution, value),
                 launch=not runtime.ledger.current(execution).get('attempt'))
         except (LinearAPIError, LedgerError, ControlError, ValueError) as error:
