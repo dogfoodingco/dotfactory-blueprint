@@ -163,3 +163,11 @@ This service recipe is not a deployment receipt. Verify native auth, a real
 issue-to-Review run, restart and drain on the selected host before calling it
 unattended-ready. Render uses the same `work` admission policy; see
 [cloud execution](CLOUD_EXECUTION.md). No service is installed automatically.
+
+## Linear throttling
+
+Set the same `DOTFACTORY_HOME` for coordinators on one host that use the same Linear app identity. It defaults to `~/.dotfactory`. If Linear throttles a request, each coordinator using that identity waits until the provider's retry deadline.
+
+Inspect `linear-rate-limit/activity.json` in that home for the last 100 observed throttles, including the GraphQL operation, available quota counters, and retry time. The file excludes request bodies and credentials.
+
+See [ADR-0049](../docs/decisions/0049-share-linear-rate-limit-cooldowns.md).

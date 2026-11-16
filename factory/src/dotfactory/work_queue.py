@@ -75,7 +75,9 @@ class WorkQueue:
             raise ValueError("work requires work_queue.enabled=true and an explicit admission label")
         if runtime.scheduler.policy.host_limit != 1:
             raise ValueError("work supports one active child; scheduler.limits.host must be 1")
-        if any(key not in runtime.linear_workers for key in runtime.project_keys):
+        if not getattr(runtime, "_linear_preflight_pending", False) and any(
+            key not in runtime.linear_workers for key in runtime.project_keys
+        ):
             raise ValueError("work requires enabled Linear projection for every selected project")
 
     def _record(self, project: str, value: dict[str, Any]) -> dict[str, Any]:
