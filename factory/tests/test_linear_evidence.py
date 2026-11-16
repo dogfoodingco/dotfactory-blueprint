@@ -7,8 +7,9 @@ from pathlib import Path
 from dotfactory import DurableKernel, ObservationService, SQLiteLedger
 from dotfactory.linear_api import LinearAPIError, LinearGraphQLClient
 from dotfactory.linear_evidence import (
-    LinearEvidenceWorker, readable_incidents, render_linear_run_summary,
+    LinearEvidenceWorker, link_label, readable_incidents, render_linear_run_summary,
 )
+from dotfactory.linear_agent import build_agent_projection
 from dotfactory.lifecycle import FactoryRuntime
 
 
@@ -445,6 +446,23 @@ class LinearEvidenceTests(unittest.TestCase):
         self.assertEqual("DOTFACTORY_RUNNER_FAILED", incidents[0]["primary"]["code"])
         self.assertEqual("DOTFACTORY_ERROR", incidents[0]["causes"][0]["code"])
         self.assertEqual("recovered", incidents[0]["status"])
+
+    def test_session_links_use_readable_labels(self):
+        self.assertEqual("Pull request", link_label("artifact", "https://github.com/a/b/pull/12"))
+        self.assertEqual("Delivery check", link_label("delivery_check", "https://example.test/x"))
+        self.assertEqual("Evidence", link_label(None))
+        urls, _activities = build_agent_projection(
+            {"current_state_id": "Implementing", "status": "running"},
+            {"summary": {"execution_key": "RUN-1", "links": [
+                {"kind": "artifact", "url": "https://github.com/a/b/pull/12"},
+                {"kind": "delivery_check", "url": "https://example.test/x"},
+            ]}},
+            {"state_runs": []}, marker_url="https://runs.example/1",
+        )
+        self.assertEqual(
+            {"Delivery check", "Pull request", "Dotfactory run"},
+            {item["label"] for item in urls},
+        )
 
 
 if __name__ == "__main__":

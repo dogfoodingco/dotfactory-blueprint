@@ -11,7 +11,7 @@ from typing import Any, Mapping
 
 from .ledger import LedgerError, SQLiteLedger, redact_payload
 from .linear_api import LinearAPIError, LinearGraphQLClient
-from .linear_evidence import readable_incidents, render_linear_run_summary, worker_location_label
+from .linear_evidence import link_label, readable_incidents, render_linear_run_summary, worker_location_label
 from .observability import canonical_json
 
 
@@ -66,8 +66,7 @@ def build_agent_projection(
         url = str(item.get("url") or "")
         if not url.startswith("https://") or url == marker_url:
             continue
-        label = str(item.get("kind") or "evidence").replace("_", " ").title()
-        urls.append({"label": _safe(label, 80), "url": _safe(url, 1000)})
+        urls.append({"label": _safe(link_label(item.get("kind"), url), 80), "url": _safe(url, 1000)})
     deduped = {item["url"]: item for item in urls}
     external_urls = sorted(deduped.values(), key=lambda item: item["url"])[:10]
 

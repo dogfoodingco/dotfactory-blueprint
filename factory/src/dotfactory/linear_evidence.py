@@ -29,6 +29,12 @@ def _scrub(value: Any, limit: int = 1200) -> str:
     return text[:limit]
 
 
+def link_label(kind: Any, url: str = "") -> str:
+    if re.match(r"https://github\.com/[^/]+/[^/]+/pull/\d+", url):
+        return "Pull request"
+    return str(kind or "evidence").replace("_", " ").capitalize()
+
+
 def _duration(started_at: str | None, ended_at: str | None) -> str:
     if not started_at:
         return "unknown"
