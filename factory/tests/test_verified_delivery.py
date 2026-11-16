@@ -26,6 +26,17 @@ from greeting import greet
 assert greet() == "こんにちは", greet()
 print("PASS description requirement: Japanese greeting")
 '''
+PLAN = """Implement the Japanese greeting requirement; run pinned checks.
+
+## Behavior
+Before: greet() returns "hello". After: greet() returns "こんにちは".
+
+## Out of scope
+- Other languages and any UI.
+
+## Risks
+- The wrong greeting ships. Check: criterion `greeting`.
+"""
 BROKEN_ARGV_VERIFY = '''import sys, unittest
 class GreetingTest(unittest.TestCase):
     def test_placeholder(self):
@@ -69,7 +80,7 @@ class EditingRunner:
         (root / ".factory").mkdir(exist_ok=True)
         _git(root, "config", "user.email", "test@example.invalid")
         _git(root, "config", "user.name", "Fixture")
-        (root / ".factory/plan.md").write_text("Implement the Japanese greeting requirement; run pinned checks.")
+        (root / ".factory/plan.md").write_text(PLAN)
         if launch.request.state_id in ("Autoplanning", "Planning"):
             (root / ".factory/verify.py").write_text(VERIFY)
             (root / ".factory/verification.json").write_text(json.dumps({
@@ -80,7 +91,8 @@ class EditingRunner:
             greeting = 'wrong' if self.wrong else 'こんにちは'
             (root / "greeting.py").write_text(f'def greet():\n    return {greeting!r}\n')
             (root / ".factory/delivery.json").write_text(json.dumps({
-                "summary": "Implement Japanese greeting", "limitations": ["No UI tested"]}))
+                "summary": "Implement Japanese greeting", "limitations": ["No UI tested"],
+                "spec_findings": []}))
             if self.tamper:
                 (root / ".factory/verify.py").write_text('print("fake pass")\n')
         _git(root, "add", ".")
