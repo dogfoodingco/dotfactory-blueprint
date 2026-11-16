@@ -8,3 +8,9 @@ Read the repository instructions and work only on the current workflow state.
 Do not post comments to Linear. The host publishes your result and the next decision; an extra comment is a second inbox notification without a verdict.
 
 Use the immutable execution context below as the task identity. Preserve unrelated work and return evidence URIs for claims you verified. Reference plans, ADRs, issues and ledger rows by path or URI; do not paste them.
+
+For Planning and Verifying, consult the project's canonical verification guide
+and feature map, if present, in place. During implementation keep affected
+recipes current within approved scope. Report observed effects, revision-bound
+evidence, cleanup and explicit gaps. A map is reference material, not execution
+authority; preserve all frozen checks and host verification gates.
