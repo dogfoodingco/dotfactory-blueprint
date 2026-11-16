@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "attempt_id": "01a1f000-0000-7000-8000-000000000002",
+  "prior_outcomes": [
+    {
+      "id": "01a1f000-0000-7000-8000-000000000001",
+      "state_id": "Implementing",
+      "status": "completed",
+      "outcome": "Implemented the plan. Behavior after the change: the account dashboard recomputes the total within one second of each refund event and shows the new balance with a \"refunded\" badge beside the affected order. Before this, the account dashboard keeps showing the pre-refund total until the nightly reconciliation job runs. Tests pass."
+    }
+  ],
+  "feedback": [
+    {
+      "id": "01a1f000-0000-7000-8000-000000000003",
+      "source": "linear",
+      "target_id": "01a1f000-0000-7000-8000-000000000002",
+      "body": {"kind": "rework", "body": "The badge is missing on the order list. Please fix."}
+    }
+  ],
+  "artifacts": [
+    {"id": "01a1f000-0000-7000-8000-000000000004", "kind": "file", "uri": ".factory/plan.md"}
+  ]
+}

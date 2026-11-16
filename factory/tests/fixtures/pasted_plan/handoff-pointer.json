@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "attempt_id": "01a1f000-0000-7000-8000-000000000002",
+  "prior_outcomes": [
+    {
+      "id": "01a1f000-0000-7000-8000-000000000001",
+      "state_id": "Implementing",
+      "status": "completed",
+      "outcome": "Implemented the Behavior section of `.factory/plan.md#L8-L10` (git:5d1c2e7?path=.factory/plan.md). The refund handler now triggers a dashboard recompute and the order row shows a badge. Out of scope items are untouched; see factory/tests/test_refunds.py for the idempotency check named in Risks. Tests pass."
+    }
+  ],
+  "feedback": [
+    {
+      "id": "01a1f000-0000-7000-8000-000000000003",
+      "source": "linear",
+      "target_id": "01a1f000-0000-7000-8000-000000000002",
+      "body": {"kind": "rework", "body": "The badge is missing on the order list; see https://issues.example.com/EX-12#comment-3 and the plan's Behavior section."}
+    }
+  ],
+  "artifacts": [
+    {"id": "01a1f000-0000-7000-8000-000000000004", "kind": "file", "uri": ".factory/plan.md"}
+  ]
+}
