@@ -70,8 +70,8 @@ def approve_plan(runtime, execution):
 
 
 class EditingRunner:
-    def __init__(self, *, wrong=False, missing=False, tamper=False):
-        self.wrong, self.missing, self.tamper = wrong, missing, tamper
+    def __init__(self, *, wrong=False, missing=False, tamper=False, slop=""):
+        self.wrong, self.missing, self.tamper, self.slop = wrong, missing, tamper, slop
         self.calls = []
 
     def run(self, launch):
@@ -80,7 +80,7 @@ class EditingRunner:
         (root / ".factory").mkdir(exist_ok=True)
         _git(root, "config", "user.email", "test@example.invalid")
         _git(root, "config", "user.name", "Fixture")
-        (root / ".factory/plan.md").write_text(PLAN)
+        (root / ".factory/plan.md").write_text(PLAN + self.slop)
         if launch.request.state_id in ("Autoplanning", "Planning"):
             (root / ".factory/verify.py").write_text(VERIFY)
             (root / ".factory/verification.json").write_text(json.dumps({
@@ -91,7 +91,7 @@ class EditingRunner:
             greeting = 'wrong' if self.wrong else 'こんにちは'
             (root / "greeting.py").write_text(f'def greet():\n    return {greeting!r}\n')
             (root / ".factory/delivery.json").write_text(json.dumps({
-                "summary": "Implement Japanese greeting", "limitations": ["No UI tested"],
+                "summary": "Implement Japanese greeting" + self.slop, "limitations": ["No UI tested"],
                 "spec_findings": []}))
             if self.tamper:
                 (root / ".factory/verify.py").write_text('print("fake pass")\n')
