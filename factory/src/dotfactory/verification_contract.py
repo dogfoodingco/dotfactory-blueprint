@@ -134,7 +134,9 @@ def assert_coverage(contract, config, paths):
     paths = [p for p in paths if p and not p.startswith('.factory/')]
     if not paths:
         return
-    actual = resolve(config, {'paths': paths, 'categories': contract['categories'], 'add': [], 'omit': {}})
+    # The reviewed plan's additions and waivers still count; only a method the diff newly requires is missing.
+    reviewed = sorted(set(contract['methods']) | set(contract['omitted']))
+    actual = resolve(config, {'paths': paths, 'categories': contract['categories'], 'add': reviewed, 'omit': {}})
     missing = set(actual['methods']) - set(contract['methods']) - set(contract['omitted'])
     if missing:
         raise ValueError('changed source requires a revised verification plan: ' + ', '.join(sorted(missing)))
