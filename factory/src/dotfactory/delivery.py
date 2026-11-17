@@ -170,6 +170,17 @@ def _planned_check_path(name: Any) -> bool:
     return len(parts) > 1 and (parts[0] == ".factory" or "tests" in parts[:-1])
 
 
+def _undeclared_error(stage: str, names: list[str]) -> DeliveryError:
+    """Name the rejected paths so the next attempt can declare or remove them."""
+    shown = ", ".join(repr(name[:200]) for name in names[:8])
+    more = f" (+{len(names) - 8} more)" if len(names) > 8 else ""
+    return DeliveryError(
+        f"{stage} may change only its plan and declared verification files; "
+        f"not allowed: {shown}{more}. Declare Python checks in a criterion's files, "
+        "list other harness files under a registered verification method's files, or remove them"
+    )
+
+
 def verification_definition(root: Path) -> dict[str, Any]:
     """Validate proposed acceptance coverage without executing unapproved code."""
     import ast
@@ -560,13 +571,10 @@ def evaluate(ledger: Any, launch: Any, result: RunnerResult,
                     root, "diff", "--name-only", "-z",
                     context["baseline_head_sha"], source["head_sha"], "--",
                 ).decode().split("\0")
-                if any(
-                    name and name not in receipt["verification_plan"]["files"]
-                    for name in changes
-                ):
-                    raise DeliveryError(
-                        "replanning may change only its plan and declared verification files"
-                    )
+                extra = sorted(name for name in changes
+                               if name and name not in receipt["verification_plan"]["files"])
+                if extra:
+                    raise _undeclared_error("replanning", extra)
                 receipt["replan"] = context
             else:
                 from .planning import validate_proposal
@@ -577,13 +585,10 @@ def evaluate(ledger: Any, launch: Any, result: RunnerResult,
                     receipt["verification_plan"],
                     {node["id"]: node for node in graph["states"]},
                 )
-                if any(
-                    name not in receipt["verification_plan"]["files"]
-                    for name in source["changed_files"]
-                ):
-                    raise DeliveryError(
-                        "planning may change only its plan and declared verification files"
-                    )
+                extra = sorted(name for name in source["changed_files"]
+                               if name not in receipt["verification_plan"]["files"])
+                if extra:
+                    raise _undeclared_error("planning", extra)
             from . import plan_spec
             if plan_spec.plan_contract(request.config.get("prompt")):
                 text = plan.read_text(encoding="utf-8")
