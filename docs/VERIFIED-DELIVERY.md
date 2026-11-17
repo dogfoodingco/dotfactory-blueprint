@@ -6,7 +6,8 @@ repository. Planning defines the checks; no pre-existing `verify.py` is required
 ## Flow
 
 1. **Planning:** commit `.factory/plan.md`, `.factory/verification.json`,
-   `.factory/verify.py`, and declared acceptance/regression test files.
+   `.factory/verify.py`, and declared acceptance/regression test files. Any
+   other changed path fails the check, and the error names it.
    `plan.md` needs nonempty `## Behavior`, `## Out of scope` and `## Risks`. A plan
    naming a file listed in a test's `covers:` docstring must select that test as
    an automated criterion ([ADR-0050](decisions/0050-check-the-diff-against-the-plan-brief.md)).

@@ -70,8 +70,9 @@ def approve_plan(runtime, execution):
 
 
 class EditingRunner:
-    def __init__(self, *, wrong=False, missing=False, tamper=False, slop=""):
+    def __init__(self, *, wrong=False, missing=False, tamper=False, slop="", plan_files=()):
         self.wrong, self.missing, self.tamper, self.slop = wrong, missing, tamper, slop
+        self.plan_files = plan_files
         self.calls = []
 
     def run(self, launch):
@@ -87,6 +88,8 @@ class EditingRunner:
                 "schema_version": 1, "criteria": [
                     {"id": "greeting", "requirement": "Return Japanese greeting", "kind": "automated", "files": [".factory/verify.py"]},
                     {"id": "review", "requirement": "Review wording", "kind": "manual", "procedure": "Read the greeting text."}]}))
+            for name in self.plan_files:
+                (root / name).write_text("#!/bin/sh\n")
         if launch.request.state_id not in ("Autoplanning", "Planning"):
             greeting = 'wrong' if self.wrong else 'こんにちは'
             (root / "greeting.py").write_text(f'def greet():\n    return {greeting!r}\n')
@@ -189,6 +192,19 @@ class VerifiedDeliveryTests(unittest.TestCase):
             runtime.step()
             self.assertEqual("Investigating", runtime.ledger.current(execution)["current_state_id"])
             self.assertEqual(["Autoplanning"], runner.calls)
+
+    def test_rejected_plan_names_each_undeclared_file_and_the_remedy(self):
+        self.use_automatic_workflow()
+        runner = EditingRunner(plan_files=(".factory/helper.mjs", "notes.txt"))
+        with FactoryRuntime(self.config, runner=runner) as runtime:
+            execution = runtime.start_issue("demo", "AUTO-EXTRA")
+            runtime.run([execution], until_state="Investigating", max_ticks=10)
+            self.assertEqual("Investigating", runtime.ledger.current(execution)["current_state_id"])
+            error = json.loads(runtime.ledger.connection.execute(
+                "SELECT payload_json FROM events WHERE execution_id=? AND event_type='delivery_checked'",
+                (execution,)).fetchone()[0])["error"]
+        self.assertIn("not allowed: '.factory/helper.mjs', 'notes.txt'.", error)
+        self.assertIn("or remove them", error)
 
     def tearDown(self):
         self.temp.cleanup()
