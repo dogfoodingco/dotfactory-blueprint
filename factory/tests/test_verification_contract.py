@@ -76,6 +76,13 @@ class ResolutionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'revised verification plan'):
             assert_coverage(resolve(config, selection()), config, ['src/Page.tsx'])
 
+    def test_reviewed_additions_cover_the_actual_diff(self):
+        config = registry()
+        config['rules'] = []
+        assert_coverage(resolve(config, selection(['Page.tsx'], add=['visual'])), config, ['src/Page.tsx', 'page.css'])
+        with self.assertRaisesRegex(ValueError, 'visual evidence'):
+            assert_coverage(resolve(config, selection()), config, ['src/Page.tsx'])
+
     def test_invalid_overrides_and_declarations(self):
         for value in (selection(omit={'regression': ''}), selection(add=['unknown']), selection(['../outside'])):
             with self.assertRaises(ValueError):
@@ -185,6 +192,24 @@ class ContractRunner(ChatRunner):
         return result
 
 
+SCREENSHOT = "import sys, pathlib; pathlib.Path(sys.argv[1], 'screen.png').write_bytes(b'\\x89PNG\\r\\n\\x1a\\n' + b'pixels')"
+
+
+class AddedMethodRunner(ContractRunner):
+    """The plan adds the visual method itself; no project rule selects it."""
+    def run(self, launch):
+        result = super().run(launch)
+        if launch.request.state_id in ('Autoplanning', 'Planning'):
+            root = Path(launch.workspace_path)
+            path = root / '.factory/planning-requirements.json'
+            value = json.loads(path.read_text())
+            value['verification'] = dict(selection(add=['visual']), categories=['frontend'])
+            path.write_text(json.dumps(value))
+            _git(root, 'add', '.')
+            _git(root, 'commit', '-qm', 'add the visual method')
+        return result
+
+
 class LifecycleTests(unittest.TestCase):
     setUp = fixture.VerifiedDeliveryTests.setUp
     tearDown = fixture.VerifiedDeliveryTests.tearDown
@@ -238,6 +263,22 @@ class LifecycleTests(unittest.TestCase):
             Path(after['artifacts'][0]['uri']).write_text('tampered')
             with self.assertRaisesRegex(DeliveryError, 'artifact missing or changed'):
                 require_receipt(runtime.ledger, receipt['attempt_id'], receipt['contract'])
+
+    def test_a_method_the_plan_added_still_counts_when_the_diff_is_checked(self):
+        config = registry()
+        config['rules'] = []
+        config['methods']['visual']['commands'] = {phase: ['{python}', '-c', SCREENSHOT, '{artifacts}']
+                                                   for phase in ('before', 'after')}
+        self.configure(config)
+        runner = AddedMethodRunner()
+        with FactoryRuntime(self.config, runner=runner) as runtime:
+            runner.runtime = runtime
+            execution = runtime.start_issue('demo', 'ADDED-1')
+            runtime.run([execution], until_state='PlanReview', max_ticks=8)
+            self.approve(runtime, execution)
+            runtime.run([execution], until_state='Review', max_ticks=20)
+            self.assertEqual('Review', runtime.ledger.current(execution)['current_state_id'])
+            self.assertEqual(['Autoplanning', 'Implementing', 'Verifying'], runner.calls)
 
     def test_incompatible_workflow_cannot_silently_ignore_methods(self):
         from dotfactory.lifecycle import LifecycleError
